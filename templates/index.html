@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI 디지털 트윈 교수 챗봇</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <div id="app">
+    <h1>AI 디지털 트윈 교수 챗봇</h1>
+    <div id="chat-container"></div>
+    <div id="input-container">
+      <input id="chat-input" type="text" placeholder="질문을 입력하세요…" autocomplete="off">
+      <button id="send-button">전송</button>
+    </div>
+  </div>
+
+  <script>
+  (function() {
+    const chatContainer = document.getElementById('chat-container');
+    const chatInput = document.getElementById('chat-input');
+    const sendButton = document.getElementById('send-button');
+
+    function appendMessage(text, sender) {
+      const messageEl = document.createElement('div');
+      messageEl.classList.add('message', sender);
+      messageEl.textContent = text;
+      chatContainer.appendChild(messageEl);
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function updateLastBotMessage(text) {
+      const messages = chatContainer.getElementsByClassName('message');
+      if (messages.length === 0) return;
+      const last = messages[messages.length - 1];
+      if (!last.classList.contains('bot')) return;
+      last.textContent = text;
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    function sendMessage() {
+      const query = chatInput.value.trim();
+      if (!query) return;
+      appendMessage(query, 'user');
+      chatInput.value = '';
+
+      // Start streaming from the server
+      const source = new EventSource(`/chat?query=${encodeURIComponent(query)}`);
+      let accumulated = '';
+      // Add a placeholder for the bot's message
+      appendMessage('', 'bot');
+      source.onmessage = function(event) {
+        if (event.data === '[DONE]') {
+          source.close();
+        } else if (event.data.startsWith('[ERROR]')) {
+          updateLastBotMessage('에러: ' + event.data.substring(7));
+          source.close();
+        } else {
+          accumulated += event.data;
+          updateLastBotMessage(accumulated);
+        }
+      };
+      source.onerror = function(err) {
+        console.error('SSE error:', err);
+        source.close();
+      };
+    }
+
+    sendButton.addEventListener('click', sendMessage);
+    chatInput.addEventListener('keyup', function(e) {
+      if (e.key === 'Enter') sendMessage();
+    });
+  })();
+  </script>
+</body>
+</html>
